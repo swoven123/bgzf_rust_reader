@@ -9,8 +9,9 @@ The file is compressed into a series of small (less than 64K) 'BGZF' blocks.
 This allows indexes to be built against the compressed file and used to retrieve 
 portions of the data without having to decompress the entire file. 
 
-# Algorithm used: 
-For decompresses 'deflate' algorithm is used, for more information please use this link:  https://tools.ietf.org/html/rfc1951
+### Algorithm used: 
+For decompresses 'deflate' algorithm is used, 
+for more information please use this link: https://tools.ietf.org/html/rfc1951
 
 
 ## Usage
@@ -26,5 +27,5 @@ assert_eq!(data_read.unwrap(), 52);
 assert_eq!("This is just a bgzf test,lets see how it reacts. :).", str::from_utf8(&vec).unwrap());
 ```
 
-## License
-[MIT]
+## Authors
+Swoven Pokharel: swovenpokharel@gmail.com
