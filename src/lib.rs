@@ -1,6 +1,8 @@
 use libdeflater::Decompressor;
 use positioned_io::ReadAt;
 use std::cell::Cell;
+use std::cell::RefCell;
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::error;
 use std::fs::File;
@@ -22,6 +24,13 @@ struct BgzfBlock {
   block_size: u32,
 }
 
+///Cache struct to cache uncompressed data of a whole block
+#[derive(Clone)]
+struct Cache {
+  pos: u64,
+  uncompressed_data: Vec<u8>,
+}
+
 /// Struct to read bgzf file
 ///
 /// Fields description:
@@ -34,16 +43,17 @@ struct BgzfBlock {
 pub struct BgzfReader {
   bgzf_file: File,
   block_tree: BTreeMap<u64, BgzfBlock>,
+  cache: RefCell<Option<Cache>>,
   pub input_length: u64,
   pub current_read_position: Cell<u64>,
   pub pos: Cell<u64>,
 }
 
-/// Below are the steps to use the bgzf Reader
+/// Below are the steps to use the bgzf Reader,
 /// 1st step is to create a BGZF instance with a new function
 /// after that read, and seek method can be used respectively.
 ///
-/// # Examples
+/// # Example
 /// ```
 /// use bgzf_rust_reader::BgzfReader;
 /// use std::str;
@@ -85,13 +95,14 @@ impl BgzfReader {
       input_length: input_offset,
       current_read_position: Cell::new(0),
       pos: Cell::new(0),
+      cache: RefCell::new(None),
     };
     Ok(reader)
   }
 
   /// This method can set the file position relative to uncompressed data
   ///
-  /// # Examples
+  /// # Example
   /// ```
   /// use bgzf_rust_reader::BgzfReader;
   ///
@@ -112,7 +123,7 @@ impl BgzfReader {
 
   /// this method reads data to the slice passed
   ///
-  /// # Examples
+  /// # Example
   /// ```
   /// use bgzf_rust_reader::BgzfReader;
   /// use std::str;
@@ -134,7 +145,7 @@ impl BgzfReader {
   /// this method reads data to the slice from offset position,
   /// up to the len position
   ///
-  /// # Examples
+  /// # Example
   /// ```
   /// use bgzf_rust_reader::BgzfReader;
   /// use std::str;
@@ -174,9 +185,35 @@ impl BgzfReader {
 
     let mut off = off;
     let mut len = len;
-    let mut un_compressor = Decompressor::new();
-
     let mut cb: i32 = 0;
+
+    match self.cache.borrow().as_ref() {
+      Some(cache) => {
+        if self.pos.get() >= cache.pos {
+          let bytes_available_in_cache =
+            cache.pos as usize + cache.uncompressed_data.len() - self.pos.get() as usize;
+          if bytes_available_in_cache > 0 {
+            let copy_start = (self.pos.get() - cache.pos) as usize;
+            let copy_length = min(bytes_available_in_cache, len);
+            let end_index = copy_start + copy_length;
+            b[off..]
+              .copy_from_slice(&cache.uncompressed_data[copy_start as usize..end_index as usize]);
+            cb += copy_length as i32;
+            off += copy_length;
+            len -= copy_length;
+            self.pos.set(self.pos.get() + copy_length as u64);
+            if len == 0 {
+              return Ok(cb);
+            }
+          }
+        }
+      }
+      None => {
+        //If there is no cache available lets move forward
+      }
+    }
+
+    let mut un_compressor = Decompressor::new();
 
     #[derive(Copy, Clone)]
     struct Entry {
@@ -223,6 +260,11 @@ impl BgzfReader {
         return Err(BGZFError::new("Did not fully de-compress").into());
       }
 
+      self.cache.replace(Some(Cache {
+        pos: input_offset,
+        uncompressed_data: uncompressed.clone(),
+      }));
+
       let mut copy_start: u64 = 0;
       //total uncompressed size is input_length
       let mut copy_length = block.input_length;
@@ -237,7 +279,6 @@ impl BgzfReader {
       }
       let end_index = copy_start + u64::from(copy_length);
       b[off..].copy_from_slice(&uncompressed[copy_start as usize..end_index as usize]);
-      //  b[off..].copy_from_slice(&uncompressed[copy_start as usize..copy_length as usize]);
       len -= copy_length as usize;
       self.pos.set(self.pos.get() + u64::from(copy_length));
       off += copy_length as usize;
@@ -386,25 +427,19 @@ mod tests {
       }
       Err(e) => {
         assert!(false);
-        println!("The error occurred is : {}", e);
       }
     };
     let file_content = str::from_utf8(&content).unwrap();
     assert_eq!("This is ju", file_content);
 
     reader.seek(20);
-    println!(
-      "Current read position is: {}",
-      reader.current_read_position.get()
-    );
     let mut content_two = vec![0; 32];
     match reader.read(&mut content_two, 0, 32) {
       Ok(val) => {
         assert_eq!(32, val);
       }
-      Err(e) => {
+      Err(_e) => {
         assert!(false);
-        println!("The error occurred is : {}", e);
       }
     };
     let file_content_two = str::from_utf8(&content_two).unwrap();
@@ -429,5 +464,30 @@ mod tests {
       "This is just a bgzf test,lets see how it reacts. :).",
       str::from_utf8(&vec).unwrap()
     );
+  }
+
+  #[test]
+  fn test_cache() {
+    let reader = BgzfReader::new(String::from("bgzf_test.bgz")).unwrap();
+    let mut vec = vec![0; 52];
+    let data_read = reader.read_to(&mut vec);
+    assert_eq!(data_read.unwrap(), 52);
+    assert_eq!(
+      "This is just a bgzf test,lets see how it reacts. :).",
+      str::from_utf8(&vec).unwrap()
+    );
+
+    let mut vec2 = vec![0; 119];
+    let data_read_2 = reader.read_to(&mut vec2);
+    assert_eq!(data_read_2.unwrap(), 119);
+    assert_eq!(
+    " I think it will work fine, but who knows this is still a software. Unless you have tested it 100% there is no guarante",
+      str::from_utf8(&vec2).unwrap()
+    );
+
+    let mut vec3 = vec![0; 2];
+    let data_read_3 = reader.read_to(&mut vec3);
+    assert_eq!(data_read_3.unwrap(), 2);
+    assert_eq!("e ", str::from_utf8(&vec3).unwrap());
   }
 }
