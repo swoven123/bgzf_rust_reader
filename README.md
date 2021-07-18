@@ -1,16 +1,16 @@
 # bgzf_rust_reader
 
-This library helps to read the BGZF formatted file using RUST language. 
+This library helps to read and provide random access to the BGZF formatted file using RUST language.
 
-Extracted this information from: http://www.htslib.org/doc/bgzip.html
+Extracted from: http://www.htslib.org/doc/bgzip.html
 
-Bgzip compresses files in a similar manner to, and compatible with, gzip. 
-The file is compressed into a series of small (less than 64K) 'BGZF' blocks. 
-This allows indexes to be built against the compressed file and used to retrieve 
-portions of the data without having to decompress the entire file. 
+"Bgzip compresses files in a similar manner to, and compatible with, gzip.
+The file is compressed into a series of small (less than 64K) 'BGZF' blocks.
+This allows indexes to be built against the compressed file and used to retrieve
+portions of the data without having to decompress the entire file."
 
-### Algorithm used: 
-For decompresses 'deflate' algorithm is used, 
+### Algorithm used:
+For decompresses 'deflate' algorithm is used,
 for more information please use this link: https://tools.ietf.org/html/rfc1951
 
 
