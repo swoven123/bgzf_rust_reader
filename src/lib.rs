@@ -8,11 +8,12 @@ use std::ops::Bound::{Excluded, Included};
 use std::str;
 use std::{error::Error, fmt};
 
-/// Struct to hold the block information
-/// data_offset: pointer of file where real data is located
-/// data_length: total length of data i.e (block - header - footer)
-/// input_length: uncompressed length of the data
-/// block_size: length of the block
+/// Struct to hold the block information:
+///
+/// data_offset: pointer of file where real data is located,
+/// data_length: total length of data i.e (block - header - footer,
+/// input_length: uncompressed length of the data,
+/// block_size: length of the block,
 #[derive(Copy, Clone)]
 struct BgzfBlock {
   data_offset: u64,
@@ -22,12 +23,14 @@ struct BgzfBlock {
 }
 
 /// Struct to read bgzf file
+///
 /// Fields description:
-/// bgzf_file: file we are trying to read
-/// block_tree: indexes of the each block
-/// input_length: total length of the uncompressed version
-/// current_read_position: current position of the compressed file
-/// pos: current position of the uncompressed file
+///
+/// bgzf_file: file we are trying to read,
+/// block_tree: indexes of the each block,
+/// input_length: total length of the uncompressed version,
+/// current_read_position: current position of the compressed file,
+/// pos: current position of the uncompressed file,
 pub struct BgzfReader {
   bgzf_file: File,
   block_tree: BTreeMap<u64, BgzfBlock>,
