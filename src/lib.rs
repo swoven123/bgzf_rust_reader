@@ -35,8 +35,6 @@ struct Cache {
 ///
 /// Fields description:
 ///
-/// bgzf_file: file we are trying to read,
-/// block_tree: indexes of the each block,
 /// input_length: total length of the uncompressed version,
 /// current_read_position: current position of the compressed file,
 /// pos: current position of the uncompressed file,
@@ -490,4 +488,5 @@ mod tests {
     assert_eq!(data_read_3.unwrap(), 2);
     assert_eq!("e ", str::from_utf8(&vec3).unwrap());
   }
+
 }
